@@ -1,7 +1,7 @@
 #+SETUPFILE: https://fniessen.github.io/org-html-themes/setup/theme-readtheorg.setup
 #+SETUPFILE: https://github.com/anshustov/template/raw/master/article.org
 
-#+TITLE:     Установка Arch
+#+TITLE:     Установка Arch НЕ РАБОТАЕТ!!!
 #+AUTHOR:    Алексей Шустов
 #+EMAIL:     anshustov@gmail.com
 #+DATE:      2020
@@ -663,3 +663,4 @@ sudo pacman -S virtualbox-guest-utils
 modprobe -a vboxguest vboxsf vboxvideo
 VBoxClient-all
 #+END_SRC
+q
