@@ -1,0 +1,665 @@
+#+SETUPFILE: https://fniessen.github.io/org-html-themes/setup/theme-readtheorg.setup
+#+SETUPFILE: https://github.com/anshustov/template/raw/master/article.org
+
+#+TITLE:     Установка Arch
+#+AUTHOR:    Алексей Шустов
+#+EMAIL:     anshustov@gmail.com
+#+DATE:      2020
+
+* Введение
+
+Универсальная инструкция по установки и настройки для серверных, рабочих и виртуальных машин. 
+Инструкция разбита на 4 этапа:
+
+1. Установка - >> общий этап для всех вариантов машин;
+2. Серверная - >> настройка пакетов для функционировани: ssh, nat, firewall, DNS, ftp, samba, web-server и т.д;
+3. Рабочая - >> настройка рабочего стола и установка: браузера, офисного пакет и т.д;
+4. Виртуальная - >> установка и настройка;
+
+** Задачи [0/14]
+
+- [ ] Подключение к Интернету
+- [ ] Разметка диска
+- [ ] Установка системы
+- [ ] Настройка языка
+- [ ] Настройка времени
+- [ ] Установка имени хоста
+- [ ] Настройка пользователей
+- [ ] Установка загрузчика
+- [ ] Настройка сети
+- [ ] Настройка DHCP сервера
+- [ ] Настройка интернета
+- [ ] Настройка маршрутов
+- [ ] Настройка iptables
+- [ ] Завершение установки
+
+* Установка
+** DONE Подключение к установке по SSH
+
+#+BEGIN_SRC sh +n
+passwd
+systemctl start sshd.service
+ip a
+#+END_SRC
+
+** Подключение к интернету
+*** TODO PPPOE
+
+#+BEGIN_SRC sh -n
+pppoe-setup
+pppoe-start
+ping -c 4 ya.ru
+#+END_SRC
+
+** Размеpтка диска
+
+Вывести список дисков и запустить утилиту работы с дисками.
+
+#+BEGIN_SRC sh +n
+parted
+#+END_SRC
+
+|---+-----------+---------+---------------------+--------|
+|   | Название  | Размер  | Тип                 | Формат |
+|---+-----------+---------+---------------------+--------|
+| / | <>        | <>      | <>                  | <>     |
+| # | /dev/sda1 | 512MiB  | EFI System          | FAT32  |
+| # | /dev/sda2 | 2048MiB | Linux swap          | swap   |
+| # | /dev/sda3 | free    | Linux root (x86-64) | ext4   |
+|---+-----------+---------+---------------------+--------|
+
+help -- Помощь
+
+#+BEGIN_SRC sh +n
+unit MiB
+print
+mklabel gpt
+mkpart primary fat32 2048s 513MiB
+mkpart primary linux-swap 513Mib 4609MiB
+mkpart primary ext4 4609MiB 100%
+set 1 boot on
+print
+quit
+#+END_SRC
+
+Форматируем разделы
+
+#+BEGIN_SRC sh +n
+mkfs.fat -F32 -n BOOT /dev/sda1
+mkfs -t ext4 -L root /dev/sda3
+#+END_SRC
+
+Форматируем свап раздел
+
+#+BEGIN_SRC sh +n
+mkswap /dev/sda2
+swapon /dev/sda2
+#+END_SRC
+
+** Установка системы
+
+Монтируем разделы.
+
+#+BEGIN_SRC sh +n
+mount /dev/sda3 /mnt
+mkdir /mnt/boot
+mount /dev/sda1 /mnt/boot
+#+END_SRC
+
+Устанавливаем систему.
+
+#+BEGIN_SRC sh +n
+pacstrap -i /mnt base base-devel linux linux-firmware
+#+END_SRC
+
+Генерируем fstab.
+
+#+BEGIN_SRC sh +n
+genfstab -U -p /mnt >> /mnt/etc/fstab
+#+END_SRC
+
+Изменяем корневой раздел на установленный.
+
+#+BEGIN_SRC sh +n
+arch-chroot /mnt
+#+END_SRC
+
+Обновляем список пакетов в репозитории.
+
+#+BEGIN_SRC sh +n
+pacman -Syu
+pacman -S vim
+#+END_SRC
+
+** Настройка времени
+
+#+BEGIN_SRC sh +n
+ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
+hwclock --systohc
+#+END_SRC
+
+** Настройка языка
+
+Настройка языка и кодировки.
+
+#+BEGIN_SRC sh +n
+vim /etc/locale.gen
+-----------------
+en_US.UTF-8 UTF-8
+ru_RU.UTF-8 UTF-8
+-----------------
+#+END_SRC
+
+Генерируем и экспортируем локаль.
+
+#+BEGIN_SRC sh +n
+locale-gen
+echo LANG=en_US.UTF-8 > /etc/locale.conf
+export LANG=en_US.UTF-8
+#+END_SRC
+
+** Настройка консоли
+
+#+BEGIN_SRC sh +n
+ls /usr/share/kbd/keymaps/**/*.map.gz
+loadkeys ru
+#+END_SRC
+
+** Установка имени хоста
+
+Заменить *NAME* на нужное имя.
+
+#+BEGIN_SRC sh +n
+echo NAME > /etc/hostname
+#+END_SRC
+
+** Настройка пользователей
+
+Меняем пароль root пользователя.
+
+#+BEGIN_SRC sh +n
+passwd
+#+END_SRC
+
+Создаём нового пользователя. Заменить *NAME* на нужное имя.
+
+#+BEGIN_SRC sh +n
+useradd -m -G users -G wheel -s /bin/bash NAME
+passwd NAME
+#+END_SRC
+
+Добавляем пользователя в sudo.
+
+#+BEGIN_SRC sh +n
+pacman -S sudo
+vim /etc/sudoers
+-------------------------
+%wheel   ALL=(ALL:ALL) ALL
+-------------------------
+
+#+END_SRC
+
+** Установка загрузчика
+
+#+BEGIN_SRC sh +n
+pacman -S grub efibootmgr
+grub-install /dev/sda --target=x86_64-efi --efi-directory=/boot
+grub-mkconfig -o /boot/grub/grub.cfg
+#+END_SRC
+
+** Сеть
+
+#+BEGIN_SRC sh +n
+pacman -S networkmanager
+systemctl enable NetworkManager
+#+END_S
+** SSH
+
+#+BEGIN_SRC sh +n
+pacman -S openssh
+systemctl start sshd.service
+systemctl enable sshd
+systemctl status sshd
+#+END_SRC
+
+** Завершение установки
+
+Выходим из chroot, размонтируем разделы и перезагружаемся.
+   
+#+BEGIN_SRC sh +n
+exit
+umount -R /mnt/boot
+umount -R /mnt
+reboot
+#+END_SRC
+
+* Настройка
+** Репозиторий
+*** Yandex
+
+#+BEGIN_SRC file
+sudo vim /etc/pacman.d/mirrorlist
+---------------------------------
+## Yandex
+Server = mirror.yandex.ru/archlinux/$repo/os/$arch
+---------------------------------
+sudo pacman -Syu
+#+END_SRC
+
+*** Скрипт reflector
+
+#+BEGIN_SRC file
+sudo pacman -S reflector
+sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak
+sudo reflector --verbose -p http -l 10 --sort rate --save /etc/pacman.d/mirrorlist
+sudo pacman -Syu
+#+END_SRC
+
+Запуск по таймеру
+
+#+BEGIN_SRC file
+sudo vim /etc/systemd/system/reflector.timer
+--------------------------------------------
+[Unit]
+Description=Run reflector weekly
+
+[Timer]
+OnCalendar=weekly
+AccuracySec=12h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+--------------------------------------------
+sudo systemctl enable reflector.timer
+#+END_SRC
+
+*** AUR
+
+#+BEGIN_SRC file
+sudo pacman -S git
+git clone https://aur.archlinux.org/yay-bin.git
+cd yay-bin
+makepkg -si
+cd ~
+rm -rf yay-bin
+#+END_SRC
+
+** TODO Интернет
+*** TODO PPPOE
+
+#+BEGIN_SRC file
+/etc/ppp/ip-up.d/10-route.sh
+------------------------------------------
+#!/bin/sh
+/usr/bin/route del default
+/usr/bin/route add default ppp
+/usr/bin/route add +net 192.168.1.0 netmask 255.255.255.0 dev enp26s0f0
+iptables -t nat -A POSTROUTING -o ppp0 -j MASQUERADE
+#+END_SRC
+
+*** TODO PPTP
+
+#+BEGIN_SRC file
+
+#+END_SRC
+
+** Сеть
+*** TODO Статический адрес
+
+#+BEGIN_SRC sh +n
+ip a add 192.168.1.101/24 dev ens3
+ip route add default via 192.168.1.254
+vim /etc/resolv.conf
+--------------------
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+--------------------
+ping ya.ru
+#+END_SRC
+
+#+BEGIN_SRC sh +n
+cp /etc/netctl/examples/ethenet-static  /etc/netctl/static.ens3
+vim /etc/netctl/static.ens3
+---------------------------
+Description='A basic static ethernet connection'
+Interface=ens3
+Connection=ethernet
+IP=static
+Address=('185.87.49.81/22')
+#Routes=('192.168.0.0/24 via 192.168.1.2')
+Gateway='185.87.48.1'
+DNS=('8.8.8.8')
+ 
+## For IPv6 autoconfiguration
+#IP6=stateless
+ 
+## For IPv6 static address configuration
+#IP6=static
+#Address6=('1234:5678:9abc:def::1/64' '1234:3456::123/96')
+#Routes6=('abcd::1234')
+#Gateway6='1234:0:123::abcd'
+---------------------------
+netctl start static.ens3
+netctl status static.ens3
+netctl enable static.ens3
+#+END_SRC
+
+*** TODO Объединение каналов
+*** TODO NAT
+* Сервер
+** TODO OpenVPN
+
+** TODO Сертификаты сервера
+
+Проверяем поддержку tun и установим openvpn
+
+#+BEGIN_SRC sh +n
+test ! -c /dev/net/tun && echo openvpn requires tun support || echo tun включен
+pacman -S openvpn
+#+END_SRC
+
+Устанавливаем easy-rsa.
+
+#+BEGIN_SRC sh +n
+pacman -S easy-rsa
+#+END_SRC
+
+Поднимаем удостоверяющий центр.
+
+#+BEGIN_SRC sh +n
+cd /etc/easy-rsa
+export EASYRSA=$(pwd)
+easyrsa init-pki
+easyrsa build-ca
+#+END_SRC
+
+Копируем.
+
+#+BEGIN_SRC sh +n
+cp /etc/easy-rsa/pki/ca.crt /etc/openvpn/server/
+#+END_SRC
+
+Генерируем сертификат и приватный ключ сервера.
+
+#+BEGIN_SRC sh +n
+easyrsa gen-req vimate nopass
+cp /etc/easy-rsa/pki/private/vimate.key /etc/openvpn/server/
+#+END_SRC
+
+Сам сертификат необходимо подписать прежде чем копировать в директорию openvpn.
+
+#+BEGIN_SRC sh +n
+easyrsa sign-req server vimate
+cp /etc/easy-rsa/pki/issued/vimate.crt /etc/openvpn/server/
+#+END_SRC
+
+Diffie-Hellman (DH) файл.
+
+#+BEGIN_SRC sh +n
+openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
+#+END_SRC
+
+Hash-based Message Authentication Code (HMAC) ключ.
+
+#+BEGIN_SRC sh +n
+openvpn --genkey --secret /etc/openvpn/server/ta.key
+#+END_SRC
+
+** Клиентские сертификаты.
+
+Генерируем клиентский сертификат.
+
+#+BEGIN_SRC sh +n
+easyrsa gen-req vpnclient nopass
+easyrsa sign-req client vpnclient
+#+END_SRC
+
+Сертификат будет сгенерирован в файле /etc/easy-rsa/pki/issued/anshustov.crt
+
+#+BEGIN_SRC sh +n
+mkdir /home/user/vpn
+cp /etc/openvpn/server/ta.key /home/user/vpn/
+cp -R /etc/easy-rsa/pki/issued/* /home/user/vpn/
+chown -R user:users /home/user/vpn/
+#+END_SRC
+
+
+На клиенте выполнить.
+
+#+BEGIN_SRC sh +n
+mkdir /Users/anshustov/Downloads/vpn
+scp -r user@192.168.1.1:/home/user/vpn/* /Users/anshustov/Downloads/vpn
+#+END_SRC
+
+** TODO OpenVPN
+Копируем образец файла настройки.
+
+#+BEGIN_SRC sh +n
+cp /usr/share/openvpn/examples/server.conf /etc/openvpn/server/server.conf
+#+END_SRC
+
+Привести к виду.
+
+#+BEGIN_SRC file
+/etc/openvpn/server/server.conf
+------------------------
+port 1194
+proto udp
+dev tun
+ 
+ca /etc/openvpn/server/ca.crt
+cert /etc/openvpn/server/server.crt
+key /etc/openvpn/server/server.key
+dh /etc/openvpn/server/dh2048.pem
+tls-auth /etc/openvpn/server/ta.key 0
+ 
+server 10.0.0.0 255.255.255.0
+ifconfig-pool-persist ipp.txt
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 8.8.8.8"
+push "dhcp-option DNS 8.8.4.4"
+ 
+client-to-client
+keepalive 10 120
+ 
+cipher AES-256-CBC
+comp-lzo
+ 
+max-clients 10
+ 
+user nobody
+group nobody
+ 
+persist-key
+persist-tun
+ 
+log /var/log/openvpn.log
+status /var/log/openvpn-status.log
+verb 5
+mute 20
+ 
+#client-config-dir ccd
+#mode server
+#tls-server
+#+END_SRC
+
+Проверяем настройки.
+
+#+BEGIN_SRC sh +n
+openvpn /etc/openvpn/server/server.conf
+#+END_SRC
+
+Запускаем сервер, добавляем его в автозагрузку и проверяем.
+
+#+BEGIN_SRC sh +n
+systemctl start openvpn-server@server.service
+systemctl enable openvpn-server@server.service
+systemctl status openvpn-server@server.service
+#+END_SRC
+
+** TODO Клиент
+
+Пути поумолчанию для клиентских сертификатов.
+
+/etc/openvpn/certs/ca.crt
+/etc/openvpn/certs/client.crt
+/etc/openvpn/certs/client.key
+/etc/openvpn/certs/ta.key
+
+Создадим клиенский файл конфигурации.
+
+#+BEGIN_SRC file
+/etc/openvpn/client.conf
+------------------------
+client
+remote 85.175.7.222
+ca /etc/openvpn/certs/ca.crt
+cert /etc/openvpn/certs/client.crt
+key /etc/openvpn/certs/client.key
+cipher DES-EDE3-CBC
+comp-lzo yes
+dev tun
+proto udp
+tls-auth /etc/openvpn/certs/ta.key 1
+nobind
+auth+nocache
+persist-key
+persist-tun
+user nobody
+group nogroup
+#+END_SRC
+
+Запуск, тестирование и добавление в автозагрузку.
+
+#+BEGIN_SRC sh +n
+systemctl start openvpn@client
+systemctl status openvpn@client
+systemctl enable openvpn@client
+#+END_SRC
+
+** TODO OpenSSH
+** TODO sFTP
+** TODO Samba
+** TODO Bind9
+** TODO Apache
+** TODO MySQL
+** TODO NTPD
+** TODO Postfix
+** TODO WebDAVce
+** TODO IPTABLES
+
+#+BEGIN_SRC file
+#!/bin/sh
+ 
+echo 1 > /proc/sys/net/ipv4/ip_forward
+ 
+# Пример настройки файервола для OpenVPN.
+ 
+# Если нужно, сделайте соответствующие 
+# изменения, сети вашего OpenVPN
+PRIVATE=10.8.0.0/24
+ 
+# Петлевой адрес
+LOOP=127.0.0.1
+ 
+# Удалить старые правила iptables
+# и временно заблокировать весь траффик.
+iptables -P OUTPUT DROP
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -F
+ 
+# Установление политик по умолчанию
+iptables -P OUTPUT ACCEPT
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+ 
+# Предотвращаем использование локальных адресов внешними пакетами
+iptables -A INPUT -i ens3 -s $LOOP -j DROP
+iptables -A FORWARD -i ens3 -s $LOOP -j DROP
+iptables -A INPUT -i ens3 -d $LOOP -j DROP
+iptables -A FORWARD -i ens3 -d $LOOP -j DROP
+ 
+# Всё, что приходит из Интернета, должно иметь реальный адрес
+iptables -A FORWARD -i ens3 -s 192.168.0.0/16 -j DROP
+iptables -A FORWARD -i ens3 -s 172.16.0.0/12 -j DROP
+iptables -A FORWARD -i ens3 -s 10.8.0.0/8 -j DROP
+iptables -A INPUT -i ens3 -s 192.168.0.0/16 -j DROP
+iptables -A INPUT -i ens3 -s 172.16.0.0/12 -j DROP
+iptables -A INPUT -i ens3 -s 10.8.0.0/8 -j DROP
+ 
+# Блокируем исходящий NetBios (если в вашей подсети
+# есть машины с Windows).  Это не окажет влияния на какой-либо
+# траффик NetBios, который идёт по VPN туннелю, но остановит
+# локальные машины Windows от самостоятельного 
+# широковещания в Интернет.
+iptables -A FORWARD -p tcp --sport 137:139 -o ens3 -j DROP
+iptables -A FORWARD -p udp --sport 137:139 -o ens3 -j DROP
+iptables -A OUTPUT -p tcp --sport 137:139 -o ens3 -j DROP
+iptables -A OUTPUT -p udp --sport 137:139 -o ens3 -j DROP
+ 
+# Разрешаем локальные петли
+iptables -A INPUT -s $LOOP -j ACCEPT
+iptables -A INPUT -d $LOOP -j ACCEPT
+ 
+# Позволяем входящий пинг (можно отключить)
+# iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+ 
+# Разрешаем такие службы как www и ssh (можно отключить)
+iptables -A INPUT -p tcp --dport http -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+ 
+# Разрешаем входящие пакеты OpenVPN 
+# Дуплицируйте строку ниже для каждого
+# туннеля OpenVPN, меняя --dport n
+# для соответствия порту OpenVPN UDP.
+#
+# В OpenVPN номер порта
+# контролируется опцией --port n.
+# Если вы разместили эту опцию в конфигурационном 
+# файле, вы можете удалить предшествующие '--'
+#
+# If you taking the stateful firewall
+# approach (see the OpenVPN HOWTO),
+# then comment out the line below.
+ 
+iptables -A INPUT -p udp --dport 1194 -j ACCEPT
+ 
+# Разрешить пакеты от устройств TUN/TAP.
+# Когда OpenVPN запущен в безопасном режиме,
+# он будет проверять подлинность пакетов до
+# их прибытия на интерфейс 
+# tun или tap.  Следовательно нет
+# необходимости добавлять сюда какие-либо фильтры,
+# если вы не хотите ограничить
+# тип пакетов, которые могут проходить
+# через туннель.
+ 
+iptables -A INPUT -i tun+ -j ACCEPT
+iptables -A FORWARD -i tun+ -j ACCEPT
+iptables -A INPUT -i tap+ -j ACCEPT
+iptables -A FORWARD -i tap+ -j ACCEPT
+ 
+# Сохранить состояние подключений от локальной машины и частных сетей
+iptables -A OUTPUT -m state --state NEW -o ens3 -j ACCEPT
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -m state --state NEW -o ens3 -j ACCEPT
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+ 
+# Маскировка локальной сети
+iptables -t nat -A POSTROUTING -s $PRIVATE -o ens3 -j MASQUERADE
+#+END_SRC
+  
+* Рабочее окружение
+* TODO VirtualBox
+
+Устанавливаем зависимости.
+
+#+BEGIN_SRC sh +n
+sudo pacman -S virtualbox-guest-utils
+modprobe -a vboxguest vboxsf vboxvideo
+VBoxClient-all
+#+END_SRC
